@@ -12,7 +12,7 @@ https://kb.selectel.com/docs/cloud/servers/tools/how_to_use_openstack_api_throug
 
 5. Install **Terraform**. The demonstration was tested on Terraform version 1.1.x+. See the official instructions from HashiCorp: https://learn.hashicorp.com/tutorials/terraform/install-cli.
 
-6. Set shell auto-completion feature for Terraform to simplify further command line tasks. Run: `terraform -install-autocomplete`. It will append a line to your `.bashrc` file in your home directory. In order to activate this auto-completion functionality you should either re-open your shell or run the added line in the existing shell.
+6. Set shell auto-completion feature for Terraform to simplify further command line tasks. Run: `terraform -install-autocomplete`. It will append a line to file `.bashrc` in your home directory. In order to activate this auto-completion functionality you should either re-open your shell or run the added line in the existing shell.
 
 7. (Optionally) Install command line tool `openstack`. This tool will be helpful for checking cloud objects, review their parameters, etc. Consult the documentation at https://docs.openstack.org/newton/user-guide/common/cli-install-openstack-command-line-clients.html.
 
@@ -59,7 +59,7 @@ TF_LOG=DEBUG OS_DEBUG=1 terraform apply
 
 ### Grafana
 
-Open a web browser. Enter address `https://`<**grafana_url**>:`3000`. For your convenience copy pre-generated URL from `terraform output` `grafana_url`.
+Open a web browser. Enter address `https://`<**host_public_ip**>:`3000`. For your convenience copy pre-generated URL found in output of the command `terraform output grafana_url`.
 
 :information_source: Access to Grafana Web interface is limited to IP addresses defined as `proctor_ip` and to public IP address of the host from which you ran Terraform (check `curl ifconfig.ru`). 
 
@@ -70,19 +70,35 @@ Watch the "Warning: Potential Security Risk" notice and click "Advanced..." to "
 Pay attention that IP address used to access the server is registered in "Subject Alt Names" of SSL/TLS certificate provided by the Grafana server.
 
 ### Vagrant and Docker
-Login with SSH to Linux host machine as advised in output **ssh_to_host**, copy-paste full command that like below
+Login with SSH to Linux host machine as advised in output **ssh_to_host** (`terraform output ssh_to_host`), copy-paste full command that looks like below
 
 `ssh -q -o StrictHostKeyChecking=no -i ./id_rsa root@xx.xx.xx.xx`
 
 You should be able to get there as 'root' superuser without additional questions and see standard Shell command prompt.
 
-Please allow several minutes to fully initialize the environment (Vagrant + Docker) in the cloud. You can control how it is being started in real-time by running on the Linux host machine:
+:stop_sign: Please allow several minutes to fully initialize the environment (Vagrant + Docker) in the cloud. You can control how it is being started in real-time by running on the Linux host machine:
 ```bash
 tail -f /var/log/cloud-init-output.log
 ```
+Wait for a final line like this:
+  > Cloud-init v. 20.4 finished
+ 
 Once Vagrant has started a virtual machine, run `vagrant ssh` to get inside it.
 
 Check running Docker containers: `sudo docker ps` inside the virtual machine.
+
+### Stress testing
+*Optionally* you might want to add some mild load to the host to watch how Grafana represents this.
+
+In the virtual machine launched by Vagrant install a tool called 'stress': `sudo apt install stress`.
+
+Run this tool with a few basic parameters: `stress -c 1`.
+
+## Ansible
+When tunning Ansible playbooks are needed, they can be made on the Linux host. YAML file [guest_setup.yaml](guest_setup.yaml) is put by default into `/root/guest_setup.yaml`. After changes to this file have been made, manually run the same command as Vagrant runs when starts a virtual machine:
+```bash
+PYTHONUNBUFFERED=1 ANSIBLE_NOCOLOR=true ANSIBLE_HOST_KEY_CHECKING=false ANSIBLE_SSH_ARGS='-o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes -o ControlMaster=auto -o ControlPersist=60s' ansible-playbook --connection=ssh --timeout=30 --limit="default" --inventory-file=/root/.vagrant/provisioners/ansible/inventory --become --become-user=root -v guest_setup.yaml
+```
 
 ***
 ## Terminate all cloud instances 
