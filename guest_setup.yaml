@@ -1,0 +1,205 @@
+- hosts: all
+  tasks:
+
+  - name: Install Python3 and lsb-release
+    package:
+      update_cache: yes    
+      name: [ "python3", "python3-pip", "lsb-release" ]
+      state: present
+
+  - name: Install packages required by Docker
+    package:
+      state: latest
+      name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gpg-agent
+      - software-properties-common
+
+  # The "distro-agnostic" way below.
+  # Check availability of these fields in 'ansible localhost -m ansible.builtin.setup'
+  - name: Add Docker GPG key
+    apt_key:
+      url: https://download.docker.com/linux/{{ ansible_lsb.id|lower }}/gpg
+      state: present
+
+  - name: Add Docker apt repo
+    apt_repository:
+      repo: deb https://download.docker.com/linux/{{ ansible_lsb.id|lower }} {{ ansible_lsb.codename|lower }} stable
+      state: present
+
+  - name: Install Docker
+    package:
+      update_cache: yes
+      state: present 
+      name:
+      - docker-ce
+      - docker-ce-cli
+      - docker-compose
+      - containerd.io
+      - python3-docker
+
+  - name: Install Node Exporter
+    package:
+      update_cache: yes
+      state: present 
+      name:
+      - prometheus-node-exporter
+
+  - name: Start Docker service
+    service:
+      name: docker
+      state: started
+
+  - name: Start Node Exporter
+    service:
+      name: prometheus-node-exporter
+      state: started
+
+  - name: Disable services
+    service:
+      name: unattended-upgrades
+      state:   stopped
+      enabled: no
+
+  - name: Create Grafana folders
+    file:
+      path: '{{ item }}'
+      state: directory
+      mode: '0755'
+    loop:
+      - /vagrant/grafana/provisioning/dashboards
+      - /vagrant/grafana/provisioning/datasources
+      - /vagrant/grafana/provisioning/notifiers
+      - /vagrant/grafana/provisioning/plugins
+
+  - name: Create Prometheus configuration setup/prometheus.yml
+    blockinfile:
+      path: /vagrant/prometheus.yml
+      mode: '0644'
+      create: yes
+      block: |
+        global:
+          scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+          evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+
+        scrape_configs:
+          - job_name: "prometheus"
+            scheme: http
+            static_configs:
+              - targets:
+                - localhost:9090
+                - {{ ansible_default_ipv4.address }}:9100
+
+  - name: Create grafana/provisioning/dashboards/dashboard.yml
+    copy:
+      dest: /vagrant/grafana/provisioning/dashboards/dashboard.yml
+      mode: '0644'
+      content: |
+        apiVersion: 1
+
+        providers:
+          - name: 'Prometheus'
+            orgId: 1
+            folder: ''
+            type: file
+            disableDeletion: false
+            editable: true
+            allowUiUpdates: true
+            options:
+              path: /etc/grafana/provisioning/dashboards
+
+  - name: Create grafana/provisioning/datasources/datasource.yml
+    copy:
+      dest: /vagrant/grafana/provisioning/datasources/datasource.yml
+      mode: '0644'
+      content: |
+        apiVersion: 1
+
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            access: proxy
+            orgId: 1
+            url: http://prometheus:9090
+            basicAuth: false
+            isDefault: true
+            editable: true
+
+  - name: Download Dashboards
+    get_url:
+      url:  https://grafana.com/api/dashboards/{{ item }}/revisions/latest/download 
+      dest: /vagrant/grafana/provisioning/dashboards/{{ item}}.json
+      mode: '0644'
+    loop:
+      - '1860'
+      - '13496'
+
+  - name: Adjust ownership for sensitive Grafana files
+    file:
+      path: '{{ item }}'
+      owner: '472'
+    loop:
+      - /vagrant/grafana/grafana.crt
+      - /vagrant/grafana/grafana.key
+
+  - name: Start Docker containers
+    docker_compose:
+      project_name: prom_grafana
+      definition:
+        version: '3'
+
+        volumes:
+          grafana_data:
+            driver: local
+          prometheus_data:
+            driver: local
+
+        networks:
+          back_tier:
+            driver: bridge
+
+        services:
+
+          prometheus:
+            # 2.35.0 / 2022-04-21
+            image: bitnami/prometheus:2
+            hostname: prometheus
+            command:
+              - '--config.file=/etc/prometheus/prometheus.yml'
+              - '--web.enable-lifecycle'
+              - '--storage.tsdb.path=/prometheus'
+              - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+              - '--web.console.templates=/usr/share/prometheus/consoles'
+            volumes:
+              - prometheus_data:/prometheus
+              - /vagrant/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+            expose:
+              - 9090
+            networks:
+              - back_tier
+            restart: always
+
+          grafana:
+            # 8.5.0 / 2022-04-21
+            image: grafana/grafana:8.5.0
+            hostname: grafana
+            # user: "472"
+            environment:
+              - GF_SERVER_PROTOCOL=https
+              - GF_SERVER_CERT_FILE=/etc/grafana/grafana.crt
+              - GF_SERVER_CERT_KEY=/etc/grafana/grafana.key
+              - GF_LOG_LEVEL=debug
+            depends_on:
+              - prometheus
+            ports:
+              - 3000:3000
+            volumes:
+              - /vagrant/grafana/provisioning/:/etc/grafana/provisioning/
+              - /vagrant/grafana/grafana.crt:/etc/grafana/grafana.crt:ro
+              - /vagrant/grafana/grafana.key:/etc/grafana/grafana.key:ro
+            networks:
+              - back_tier
+            restart: always
+
