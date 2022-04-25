@@ -1,0 +1,38 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  # config.vm.box = "generic/ubuntu2004"
+  config.vm.box = "${vagrant_image_name}"
+  config.vm.box_check_update = false
+  config.vm.synced_folder "/root/setup", "/vagrant"
+
+  # Grafana
+  config.vm.network "forwarded_port", guest: 3000, host: 3000, host_ip: "0.0.0.0"
+
+  config.vm.hostname = "astra-demo"
+  config.ssh.keep_alive = true
+  config.ssh.compression = false
+
+  config.vm.provider :libvirt do |v, override|
+    v.disk_bus = "virtio"
+    v.driver = "kvm"
+    v.memory = 1024
+    v.cpus = 2
+  end
+
+  config.vm.provider "virtualbox" do |vbox|
+    vbox.gui = false
+    vbox.memory = "1024"
+    vbox.cpus    = 2
+  end
+
+  config.vm.provision "ansible" do |ansible|
+    ansible.playbook = "guest_setup.yaml"
+    ansible.verbose = "v"
+    ansible.become = true
+    ansible.become_user = 'root'
+    ansible.host_key_checking = false
+  end
+
+end

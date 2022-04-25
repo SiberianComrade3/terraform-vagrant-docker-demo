@@ -1,0 +1,91 @@
+#cloud-config
+package_update: true
+packages:
+  - ansible
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gpg-agent
+  - libeatmydata1
+  - libvirt-clients
+  - libvirt-daemon
+  - libvirt-daemon-system
+  - libvirt-daemon-system-systemd
+  - lsb-release
+  - mc
+  - python3
+  - python3-pip
+  - qemu
+  - qemu-kvm
+  - qemu-utils
+  - vagrant
+  - vagrant-libvirt
+  - wget
+
+write_files:
+  - path: /root/Vagrantfile
+    permissions: '0644'
+    content: |
+      ${vagrantfile}
+
+  - path: /root/setup/grafana/grafana.crt
+    permissions: '0600'
+    content: |
+      ${grafana_cert}
+
+  - path: /root/setup/grafana/grafana.key
+    permissions: '0600'
+    content: |
+      ${grafana_key}
+
+  - path: /root/guest_setup.yaml
+    permissions: '0644'
+    content: |
+      ${guest_setup_yaml}
+
+  - path: /tmp/setup/firewall.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # The order of commands is correct.
+
+      iptables -P INPUT DROP
+
+      iptables -I INPUT -p tcp                   --dport 22   -j DROP
+      iptables -I INPUT -p icmp                               -j DROP
+
+      iptables -I INPUT -p tcp  -s ${master_ip}  --dport 22   -j ACCEPT
+      iptables -I INPUT -p tcp  -s ${proctor_ip} --dport 22   -j ACCEPT
+
+      # TCP/3000 - Grafana
+      iptables -I INPUT -p tcp  -s ${master_ip}  --dport 3000 -j ACCEPT
+      iptables -I INPUT -p tcp  -s ${proctor_ip} --dport 3000 -j ACCEPT
+
+      iptables -I INPUT -p icmp -s ${master_ip}               -j ACCEPT
+      iptables -I INPUT -p icmp -s ${proctor_ip}              -j ACCEPT      
+
+      iptables -I INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+      iptables -I INPUT -i lo -j ACCEPT
+
+      exit 0
+
+  - path: /tmp/setup/run.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # set -e
+
+      curl -qsL https://app.vagrantup.com/generic/boxes/${vagrant_image_name}/versions/${vagrant_image_version}/providers/libvirt.box --output /root/libvirt.box
+
+      # 'export HOME' - workaround for Ruby error "`expand_path': couldn't find login name"
+      cd /root
+      export HOME=/root
+
+      vagrant box add --name ${vagrant_image_name} /root/libvirt.box
+      vagrant up
+      rm  -f /root/libvirt.box
+
+runcmd:
+  - /tmp/setup/firewall.sh
+  - /tmp/setup/run.sh
+
