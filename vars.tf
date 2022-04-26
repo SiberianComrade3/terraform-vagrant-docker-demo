@@ -1,4 +1,4 @@
-# Connection/Auth
+# Connection/Auth, define them in terraform.tfvars or environment variables TF_VAR_xxx
 variable "user_name" {
   description = "Used to initiate Provider OpenStack: 'user_name'"
 }
