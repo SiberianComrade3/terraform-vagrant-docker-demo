@@ -1,0 +1,23 @@
+name: Ansible Lint
+on: 
+  push:
+    paths:
+    - '**.yml'
+    - '**.yaml'  
+  pull_request:
+    paths:
+    - '**.yml'
+    - '**.yaml'  
+  schedule:
+  - cron: '30 6 * * 1'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Run ansible-lint
+        uses: ansible-community/ansible-lint-action@main
