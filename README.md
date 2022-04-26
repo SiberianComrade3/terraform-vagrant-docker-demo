@@ -1,3 +1,7 @@
+[![Ansible Lint](https://github.com/SiberianComrade3/terraform-vagrant-docker-demo/actions/workflows/ansible-lint.yml/badge.svg)](https://github.com/SiberianComrade3/terraform-vagrant-docker-demo/actions/workflows/ansible-lint.yml)
+[![Terraform Lint](https://github.com/SiberianComrade3/terraform-vagrant-docker-demo/actions/workflows/terraform-lint.yml/badge.svg)](https://github.com/SiberianComrade3/terraform-vagrant-docker-demo/actions/workflows/terraform-lint.yml)
+[![tfsec](https://github.com/SiberianComrade3/terraform-vagrant-docker-demo/actions/workflows/tfsec.yml/badge.svg)](https://github.com/SiberianComrade3/terraform-vagrant-docker-demo/actions/workflows/tfsec.yml)
+
 ## Description
 This project is aimed to demonstrate how to launch fully automated setup of Grafana and Prometheus in Docker using Vagrant on a virtual machine in [Selectel cloud](https://selectel.ru/en/).
 
